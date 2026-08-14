@@ -9,7 +9,6 @@ from telethon.tl.functions.channels import InviteToChannelRequest, GetFullChanne
 from telethon.tl.types import InputPeerUser, UserStatusOffline, UserStatusLastMonth, UserStatusEmpty
 from telethon.errors import FloodWaitError
 
-# --- إعداد سيرفر الـ Flask للحفاظ على المشروع شغال 24/7 على Render ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -19,7 +18,6 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
-# --- بيانات الحسابات ---
 accounts = [
     {
         "name": "الحساب الأول",
@@ -44,23 +42,22 @@ async def worker_bot(acc_data):
         await client.connect()
         
         me = await client.get_me()
-        print(f"✅ تم الاتصال بنجاح بـ {acc_data['name']} ({me.first_name})")
+        print(f"تم الاتصال بنجاح بـ {acc_data['name']} ({me.first_name})")
         
         entity = await client.get_entity(target_group)
         
-        # سحب جهات الاتصال وفلترة المنقطعين (أكثر من 25 يوم)
         result = await client(GetContactsRequest(hash=0))
         now = datetime.now(timezone.utc)
         target_users = [u for u in result.users if not (u.bot or u.deleted) and 
                         (isinstance(u.status, (UserStatusLastMonth, UserStatusEmpty)) or 
                         (isinstance(u.status, UserStatusOffline) and (now - u.status.was_online).days >= 25))]
         
-        print(f"🎯 {acc_data['name']} وجد {len(target_users)} عضو منقطع")
+        print(f"{acc_data['name']} وجد {len(target_users)} عضو منقطع")
         
         if not target_users:
             return
 
-        status_msg = await client.send_message(report_target, f"🤖 تقرير {acc_data['name']}: جاري البدء في إضافة الأعضاء المنقطعين...")
+        status_msg = await client.send_message(report_target, f"تقرير {acc_data['name']}: جاري البدء في إضافة الأعضاء المنقطعين...")
         
         success_added = 0
         for user in target_users:
@@ -69,38 +66,21 @@ async def worker_bot(acc_data):
                     continue
                 await client(InviteToChannelRequest(channel=entity, users=[InputPeerUser(user.id, user.access_hash)]))
                 success_added += 1
-                await status_msg.edit(f"🤖 **تقرير {acc_data['name']} (نشط)**\n📊 تم إضافة: {success_added} من أصل {len(target_users)}")
-                await asyncio.sleep(40) # فاصل زمني آمن لتجنب الحظر
+                await status_msg.edit(f"تقرير {acc_data['name']} (نشط)\nتم إضافة: {success_added} من أصل {len(target_users)}")
+                await asyncio.sleep(40)
             except FloodWaitError as e:
                 await asyncio.sleep(e.seconds)
             except Exception:
                 continue
         
-        await status_msg.edit(f"🏁 **انتهت مهمة {acc_data['name']} بنجاح**\n✅ إجمالي المضافين: {success_added} عضو.")
+        await status_msg.edit(f"انتهت مهمة {acc_data['name']} بنجاح\nإجمالي المضافين: {success_added} عضو.")
         await client.disconnect()
     except Exception as e:
-        print(f"❌ خطأ في تشغيل {acc_data['name']}: {e}")
+        print(f"خطأ في تشغيل {acc_data['name']}: {e}")
 
 async def main():
-    # تشغيل الحسابين بالتوازي
     await asyncio.gather(*(worker_bot(acc) for acc in accounts))
 
 if __name__ == "__main__":
-    # تشغيل سيرفر الـ Flask في الخلفية
     threading.Thread(target=run_flask, daemon=True).start()
-    # تشغيل سكرات التليجرام
     asyncio.run(main())
-
-eof
-خطوات الرفع على Render:
- * ارفع هذين الملفين في مستودع جديد على GitHub.
- * في لوحة تحكم Render، أنشئ New Web Service واربط المستودع.
- * في خانة Build Command حط:
-   pip install -r requirements.txt
-
- * في خانة Start Command حط:
-   python main.py
-
-
-
-
